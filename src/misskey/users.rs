@@ -36,6 +36,8 @@ impl ShowUser {
     */
 }
 
+// Unused
+/*
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum UserOnlineStatus {
@@ -44,6 +46,7 @@ pub enum UserOnlineStatus {
     Active,
     Offline,
 }
+*/
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]

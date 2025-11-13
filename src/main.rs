@@ -58,34 +58,29 @@ async fn main() -> anyhow::Result<()> {
     let sango = Sango::new(&conf).await?;
     let sango = Arc::new(sango);
 
+    log::info!("Authorized as {}.", sango.self_id);
+
     loop {
         let sango = Arc::clone(&sango);
-        log::info!("Authorized as {}.", sango.self_id);
-        let ws = match MisskeyWebsocket::new(&conf.host, &conf.token).await {
-            Ok(ws) => ws,
-            Err(e) => {
-                log::warn!("{e}");
-                log::warn!("Failed to connect to WebSocket. Retrying in 30 secs...");
-                // 接続できなかったら30秒待って再接続を試みる
-                tokio::time::sleep(Duration::from_secs(30)).await;
-                continue;
-            }
-        };
-
-        if let Err(e) = sango
-            .client
-            .notes_create(CreateNote::new("うーん、うとうとしちゃってたみたい……？"))
-            .await
-        {
+        if let Err(e) = main_loop(sango, &conf).await {
             log::error!("{e}");
-            // 接続できなかったら30秒待って再接続を試みる
             tokio::time::sleep(Duration::from_secs(30)).await;
-            continue;
         }
+    }
+}
 
-        // 値が返ってきたら接続が死んでいるので、loopにより再接続を試みる
-        if let Err(e) = handler::handle(ws, sango).await {
-            eprintln!("ERR: {e}");
-        }
+async fn main_loop(sango: Arc<Sango>, conf: &Config) -> anyhow::Result<()> {
+    let sango = Arc::clone(&sango);
+    let mut ws = MisskeyWebsocket::new(&conf.host, &conf.token).await?;
+
+    sango
+        .client
+        .notes_create(CreateNote::new("うーん、うとうとしちゃってたみたい……？"))
+        .await?;
+
+    loop {
+        let next = ws.next().await?;
+        let sango = Arc::clone(&sango);
+        handler::handle(next, sango).await?;
     }
 }
