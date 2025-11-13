@@ -20,14 +20,7 @@ use crate::{
 const MAX_NICKNAME_LENGTH: usize = 15;
 
 pub async fn on_mention(note: Note, sango: Arc<Sango>) -> anyhow::Result<()> {
-    let text = note.text;
-
-    // 共通のノート設定
-    let note_create_params = CreateNote {
-        visibility: Some(note.visibility), // 公開範囲を受け取ったノートに合わせる
-        reply_id: Some(note.id.clone()),   // 返信
-        ..Default::default()
-    };
+    let text = &note.text;
 
     // 特殊処理パターン (時間がかかるので別タスクを建てる)
     if text.contains("フォロー解除して") {
@@ -39,10 +32,7 @@ pub async fn on_mention(note: Note, sango: Arc<Sango>) -> anyhow::Result<()> {
         let mention = note.user.mention();
         if user.is_following {
             let response = format!("{mention} さよなら、になっちゃうのかな……");
-            sango
-                .client
-                .notes_create(note_create_params.text(&response))
-                .await?;
+            sango.client.notes_create(note.reply(&response)).await?;
             tokio::spawn(async move {
                 tokio::time::sleep(Duration::from_secs(10)).await;
                 if let Err(e) = sango
@@ -55,20 +45,13 @@ pub async fn on_mention(note: Note, sango: Arc<Sango>) -> anyhow::Result<()> {
             });
         } else {
             let response = format!("{mention} もともとフォローしてないよー");
-            sango
-                .client
-                .notes_create(note_create_params.text(&response))
-                .await?;
+            sango.client.notes_create(note.reply(&response)).await?;
         }
         return Ok(());
     } else if text.contains("さんごちゃーん") || text.contains("さんごちゃ〜ん") {
         tokio::spawn(async move {
             tokio::time::sleep(Duration::from_secs(1)).await;
-            if let Err(e) = sango
-                .client
-                .notes_create(note_create_params.text("は〜い"))
-                .await
-            {
+            if let Err(e) = sango.client.notes_create(note.reply("は〜い")).await {
                 log::error!("{e}");
             }
         });
@@ -78,7 +61,7 @@ pub async fn on_mention(note: Note, sango: Arc<Sango>) -> anyhow::Result<()> {
             tokio::time::sleep(Duration::from_secs(1)).await;
             if let Err(e) = sango
                 .client
-                .notes_create(note_create_params.text("チョココーヒー よりもあ・な・た♪"))
+                .notes_create(note.reply("チョココーヒー よりもあ・な・た♪"))
                 .await
             {
                 log::error!("{e}");
@@ -97,15 +80,13 @@ pub async fn on_mention(note: Note, sango: Arc<Sango>) -> anyhow::Result<()> {
         if note.user_id != sango.admin_id {
             sango
                 .client
-                .notes_create(
-                    note_create_params.text("この機能は使える人が限られてるんだ。ゴメンね"),
-                )
+                .notes_create(note.reply("この機能は使える人が限られてるんだ。ゴメンね"))
                 .await?;
             return Ok(());
         }
         sango
             .client
-            .notes_create(note_create_params.text("了解。じゃあ計測してくるね"))
+            .notes_create(note.reply("了解。じゃあ計測してくるね"))
             .await?;
         tokio::spawn(async move {
             log::info!("Starting speedtest...");
@@ -120,11 +101,7 @@ pub async fn on_mention(note: Note, sango: Arc<Sango>) -> anyhow::Result<()> {
             let response = format!(
                 "計測かんりょー。下り{down:.2}Mbps、上り{up:.2}Mbps、ping値{ping:.2}msだったよ。……これは速いって言えるのかな？"
             );
-            if let Err(e) = sango
-                .client
-                .notes_create(note_create_params.text(&response))
-                .await
-            {
+            if let Err(e) = sango.client.notes_create(note.reply(&response)).await {
                 log::error!("{e}");
             }
         });
@@ -133,11 +110,7 @@ pub async fn on_mention(note: Note, sango: Arc<Sango>) -> anyhow::Result<()> {
         log::info!("Todo created.");
         tokio::spawn(async move {
             tokio::time::sleep(Duration::from_secs(60 * 60 * 3)).await;
-            if let Err(e) = sango
-                .client
-                .notes_create(note_create_params.text("これやった？"))
-                .await
-            {
+            if let Err(e) = sango.client.notes_create(note.reply("これやった？")).await {
                 log::error!("{e}");
             }
         });
@@ -153,11 +126,10 @@ pub async fn on_mention(note: Note, sango: Arc<Sango>) -> anyhow::Result<()> {
 
         let mention = note.user.mention();
         if user.is_following {
-            let nickname = sango.savedata.read().await.get_nickname(&note.user_id);
-            let name = nickname.or(note.user.name).unwrap_or(note.user.username);
+            let name = sango.savedata.read().await.get_displayname(&note.user);
             &format!("{mention} {name}さん、もうフォローしてるよー")
         } else if user.is_followed {
-            let name = note.user.name.clone().unwrap_or(note.user.username);
+            let name = note.user.name.as_ref().unwrap_or(&note.user.username);
             sango
                 .client
                 .following_create(CreateFollowing::new(&note.user_id))
@@ -220,23 +192,19 @@ pub async fn on_mention(note: Note, sango: Arc<Sango>) -> anyhow::Result<()> {
             .await
             .forget_nickname(&note.user_id)?;
         if removed {
-            let name = note.user.name.unwrap_or(note.user.username);
+            let name = note.user.name.as_ref().unwrap_or(&note.user.username);
             &format!("わかった。これからは{name}さんって呼ぶね\nこれからもよろしくね、{name}さん")
         } else {
             "もともと特別な呼び名は登録されていないみたいだよ"
         }
     } else if text.contains("さんごちゃん？") {
-        let nickname = sango.savedata.read().await.get_nickname(&note.user_id);
-        let name = nickname.or(note.user.name).unwrap_or(note.user.username);
+        let name = sango.savedata.read().await.get_displayname(&note.user);
         &format!("どうしたの？ {name}さん")
     } else {
         return Ok(());
     };
 
-    sango
-        .client
-        .notes_create(note_create_params.text(response))
-        .await?;
+    sango.client.notes_create(note.reply(response)).await?;
 
     Ok(())
 }

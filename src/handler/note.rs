@@ -4,20 +4,10 @@
 
 use rand::seq::IndexedRandom;
 
-use crate::{
-    Sango,
-    misskey::notes::{CreateNote, Note},
-};
+use crate::{Sango, misskey::notes::Note};
 
 pub async fn on_note(note: Note, sango: &Sango) -> anyhow::Result<()> {
-    let text = note.text;
-
-    // 共通のノート設定
-    let note_create_params = CreateNote {
-        visibility: Some(note.visibility), // 公開範囲を受け取ったノートに合わせる
-        reply_id: Some(note.id.clone()),   // 返信
-        ..Default::default()
-    };
+    let text = &note.text;
 
     let response = if text.contains("つらい") || text.contains("つらすぎ") {
         "つらいときは、甘えてもいいんだよ？"
@@ -39,8 +29,7 @@ pub async fn on_note(note: Note, sango: &Sango) -> anyhow::Result<()> {
         && !text.trim_end().ends_with("さんごちゃん") // 「さんごちゃん」以降に文字がある場合のみ
         && rand::random_bool(1.0 / 3.0)
     {
-        let nickname = sango.savedata.read().await.get_nickname(&note.user_id);
-        let name = nickname.or(note.user.name).unwrap_or(note.user.username);
+        let name = sango.savedata.read().await.get_displayname(&note.user);
         &format!("呼んだ？ {name}さん")
     } else if note.reply_id.is_none() {
         if text.contains("眠い")
@@ -65,10 +54,7 @@ pub async fn on_note(note: Note, sango: &Sango) -> anyhow::Result<()> {
         return Ok(());
     };
 
-    sango
-        .client
-        .notes_create(note_create_params.text(response))
-        .await?;
+    sango.client.notes_create(note.reply(response)).await?;
 
     Ok(())
 }

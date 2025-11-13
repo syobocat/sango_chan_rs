@@ -93,13 +93,6 @@ impl CreateNote {
             ..Default::default()
         }
     }
-
-    pub fn text(&self, text: &str) -> Self {
-        Self {
-            text: text.to_owned(),
-            ..self.clone()
-        }
-    }
 }
 
 #[derive(Deserialize)]
@@ -128,4 +121,15 @@ pub struct Note {
     // pub emojis: todo!(), // めんどくさいしたぶん使わない
     // pub channel_id: Option<String>, // Unused
     // pub channel: todo!(), // めんどくさいしたぶん使わない
+}
+
+impl Note {
+    pub fn reply(&self, text: &str) -> CreateNote {
+        CreateNote {
+            visibility: Some(self.visibility), // 公開範囲を受け取ったノートに合わせる
+            reply_id: Some(self.id.clone()),   // 返信
+            text: text.to_owned(),
+            ..Default::default()
+        }
+    }
 }

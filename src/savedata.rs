@@ -7,6 +7,8 @@ use std::collections::HashMap;
 use anyhow::Context;
 use serde::{Deserialize, Serialize};
 
+use crate::misskey::users::User;
+
 #[derive(Serialize, Deserialize, Default)]
 pub struct SaveData {
     nicknames: HashMap<String, String>,
@@ -40,5 +42,11 @@ impl SaveData {
 
     pub fn get_nickname(&self, id: &str) -> Option<String> {
         self.nicknames.get(id).cloned()
+    }
+
+    pub fn get_displayname(&self, user: &User) -> String {
+        self.get_nickname(&user.id)
+            .or(user.name.clone())
+            .unwrap_or(user.username.clone())
     }
 }
