@@ -46,7 +46,7 @@ impl SaveData {
 
     pub fn get_displayname(&self, user: &User) -> String {
         self.get_nickname(&user.id)
-            .or(user.name.clone())
-            .unwrap_or(user.username.clone())
+            .or_else(|| user.name.clone())
+            .unwrap_or_else(|| user.username.clone())
     }
 }
