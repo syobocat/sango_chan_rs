@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: UPL-1.0
 
-use std::{sync::Arc, time::Duration};
+use std::time::Duration;
 
 use chrono::{Local, Timelike};
 use rand::seq::IndexedRandom;
@@ -19,10 +19,9 @@ use crate::{
 
 const MAX_NICKNAME_LENGTH: usize = 15;
 
-pub async fn on_mention(note: Note, sango: Arc<Sango>) -> anyhow::Result<()> {
+pub async fn on_mention(note: Note, sango: &Sango) -> anyhow::Result<()> {
     let text = &note.text;
 
-    // 特殊処理パターン (時間がかかるので別タスクを建てる)
     if text.contains("フォロー解除して") {
         let user = sango
             .client
@@ -33,48 +32,42 @@ pub async fn on_mention(note: Note, sango: Arc<Sango>) -> anyhow::Result<()> {
         if user.is_following {
             let response = format!("{mention} さよなら、になっちゃうのかな……");
             sango.client.notes_create(note.reply(&response)).await?;
-            tokio::spawn(async move {
-                tokio::time::sleep(Duration::from_secs(10)).await;
-                if let Err(e) = sango
-                    .client
-                    .following_delete(DeleteFollowing::new(&note.user_id))
-                    .await
-                {
-                    log::error!("{e}");
-                }
-            });
+            tokio::time::sleep(Duration::from_secs(10)).await;
+            if let Err(e) = sango
+                .client
+                .following_delete(DeleteFollowing::new(&note.user_id))
+                .await
+            {
+                log::error!("{e}");
+            }
         } else {
             let response = format!("{mention} もともとフォローしてないよー");
             sango.client.notes_create(note.reply(&response)).await?;
         }
         return Ok(());
     } else if text.contains("さんごちゃーん") || text.contains("さんごちゃ〜ん") {
-        tokio::spawn(async move {
-            tokio::time::sleep(Duration::from_secs(1)).await;
-            if let Err(e) = sango.client.notes_create(note.reply("は〜い")).await {
-                log::error!("{e}");
-            }
-        });
+        tokio::time::sleep(Duration::from_secs(1)).await;
+        if let Err(e) = sango.client.notes_create(note.reply("は〜い")).await {
+            log::error!("{e}");
+        }
         return Ok(());
     } else if text.contains("何が好き？") {
-        tokio::spawn(async move {
-            tokio::time::sleep(Duration::from_secs(1)).await;
-            if let Err(e) = sango
-                .client
-                .notes_create(note.reply("チョココーヒー よりもあ・な・た♪"))
-                .await
-            {
-                log::error!("{e}");
-            }
-            tokio::time::sleep(Duration::from_secs(10)).await;
-            if let Err(e) = sango
-                .client
-                .notes_create(CreateNote::new("さっきのなに……？"))
-                .await
-            {
-                log::error!("{e}");
-            }
-        });
+        tokio::time::sleep(Duration::from_secs(1)).await;
+        if let Err(e) = sango
+            .client
+            .notes_create(note.reply("チョココーヒー よりもあ・な・た♪"))
+            .await
+        {
+            log::error!("{e}");
+        }
+        tokio::time::sleep(Duration::from_secs(10)).await;
+        if let Err(e) = sango
+            .client
+            .notes_create(CreateNote::new("さっきのなに……？"))
+            .await
+        {
+            log::error!("{e}");
+        }
         return Ok(());
     } else if text.contains("回線速度計測") {
         if note.user_id != sango.admin_id {
@@ -88,32 +81,28 @@ pub async fn on_mention(note: Note, sango: Arc<Sango>) -> anyhow::Result<()> {
             .client
             .notes_create(note.reply("了解。じゃあ計測してくるね"))
             .await?;
-        tokio::spawn(async move {
-            log::info!("Starting speedtest...");
-            let (ping, down, up) = match tokio::task::spawn_blocking(speedtest).await {
-                Ok(values) => values,
-                Err(e) => {
-                    log::error!("{e}");
-                    return;
-                }
-            };
-
-            let response = format!(
-                "計測かんりょー。下り{down:.2}Mbps、上り{up:.2}Mbps、ping値{ping:.2}msだったよ。……これは速いって言えるのかな？"
-            );
-            if let Err(e) = sango.client.notes_create(note.reply(&response)).await {
+        log::info!("Starting speedtest...");
+        let (ping, down, up) = match tokio::task::spawn_blocking(speedtest).await {
+            Ok(values) => values,
+            Err(e) => {
                 log::error!("{e}");
+                return Ok(());
             }
-        });
+        };
+
+        let response = format!(
+            "計測かんりょー。下り{down:.2}Mbps、上り{up:.2}Mbps、ping値{ping:.2}msだったよ。……これは速いって言えるのかな？"
+        );
+        if let Err(e) = sango.client.notes_create(note.reply(&response)).await {
+            log::error!("{e}");
+        }
         return Ok(());
     } else if text.contains("todo") {
         log::info!("Todo created.");
-        tokio::spawn(async move {
-            tokio::time::sleep(Duration::from_secs(60 * 60 * 3)).await;
-            if let Err(e) = sango.client.notes_create(note.reply("これやった？")).await {
-                log::error!("{e}");
-            }
-        });
+        tokio::time::sleep(Duration::from_secs(60 * 60 * 3)).await;
+        if let Err(e) = sango.client.notes_create(note.reply("これやった？")).await {
+            log::error!("{e}");
+        }
         return Ok(());
     }
 
@@ -165,7 +154,7 @@ pub async fn on_mention(note: Note, sango: Arc<Sango>) -> anyhow::Result<()> {
     } else if text.contains("ping") {
         "pong？"
     } else if text.contains("って呼んで") || text.contains("と呼んで") {
-        match extract_nickname(&text) {
+        match extract_nickname(text) {
             NicknameResult::NotFound => {
                 // 正しくなければ無視
                 return Ok(());

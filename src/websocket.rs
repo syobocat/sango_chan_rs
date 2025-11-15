@@ -9,7 +9,7 @@ use serde_json::json;
 use tokio::net::TcpStream;
 use tokio_tungstenite::{
     MaybeTlsStream, WebSocketStream,
-    tungstenite::{Bytes, Message, Utf8Bytes},
+    tungstenite::{Message, Utf8Bytes},
 };
 
 pub struct MisskeyWebsocket(WebSocketStream<MaybeTlsStream<TcpStream>>);
@@ -56,21 +56,16 @@ impl MisskeyWebsocket {
         Ok(())
     }
 
-    async fn pong(&mut self, bytes: Bytes) -> anyhow::Result<()> {
-        self.0
-            .send(Message::Pong(bytes))
-            .await
-            .context("Failed to send pong")?;
-        Ok(())
-    }
-
     pub async fn next(&mut self) -> anyhow::Result<EventBody> {
         loop {
             let next = self.0.next().await.context("Connection terminated")?;
             let message = next.context("Failed to get the next value")?;
             match message {
                 Message::Ping(bytes) => {
-                    self.pong(bytes).await?;
+                    self.0
+                        .send(Message::Pong(bytes))
+                        .await
+                        .context("Failed to send pong")?;
                 }
                 Message::Text(bytes) => {
                     let text = bytes.as_str();
@@ -79,6 +74,11 @@ impl MisskeyWebsocket {
                         continue;
                     };
                     return Ok(json.body);
+                }
+                Message::Close(_) => {
+                    // どうせ切断するのでエラーいらない
+                    let _ = self.0.send(Message::Close(None)).await;
+                    anyhow::bail!("Connection closed");
                 }
                 _ => {}
             }

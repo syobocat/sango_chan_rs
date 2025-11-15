@@ -51,7 +51,7 @@ pub async fn handle(event: EventBody, sango: Arc<Sango>) -> anyhow::Result<Handl
             }
             log::debug!("Received a mention.");
             let sango = Arc::clone(&sango);
-            mention::on_mention(note, sango).await?;
+            mention::on_mention(note, &sango).await?;
         }
         EventBodyType::Note => {
             let note: Note = match serde_json::from_value(event.body) {
