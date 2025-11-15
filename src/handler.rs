@@ -39,7 +39,7 @@ pub trait Handler {
     async fn action(&self, note: &Note, sango: &Sango) -> anyhow::Result<()> {
         let response = self.respond(note, sango).await?;
         if !response.is_empty() {
-            sango.client.notes_create(note.reply(&response)).await?;
+            sango.client.request(note.reply(&response)).await?;
         }
         Ok(())
     }

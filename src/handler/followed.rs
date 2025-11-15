@@ -18,7 +18,7 @@ pub async fn on_follow(user: User, sango: &Sango) {
     let text = format!(
         "フォローありがとうございます、{mention}さん\n「フォローして」とメンションしながら投稿すると、フォローバックするよ"
     );
-    if let Err(e) = sango.client.notes_create(CreateNote::new(&text)).await {
+    if let Err(e) = sango.client.request(CreateNote::new(&text)).await {
         log::error!("{e}");
     }
 }

@@ -55,7 +55,7 @@ impl Handler for HandleFollow {
     async fn respond(&self, note: &Note, sango: &Sango) -> anyhow::Result<String> {
         let user = sango
             .client
-            .users_show(ShowUser::by_user_id(&note.user_id))
+            .request(ShowUser::by_user_id(&note.user_id))
             .await?;
         let mention = note.user.mention();
 
@@ -66,7 +66,7 @@ impl Handler for HandleFollow {
             let name = note.user.name.as_ref().unwrap_or(&note.user.username);
             sango
                 .client
-                .following_create(CreateFollowing::new(&note.user_id))
+                .request(CreateFollowing::new(&note.user_id))
                 .await?;
             log::info!("Followed {}.", note.user_id);
             Ok(format!(
@@ -84,21 +84,21 @@ impl Handler for HandleUnFollow {
     async fn action(&self, note: &Note, sango: &Sango) -> anyhow::Result<()> {
         let user = sango
             .client
-            .users_show(ShowUser::by_user_id(&note.user_id))
+            .request(ShowUser::by_user_id(&note.user_id))
             .await?;
 
         let mention = note.user.mention();
         if user.is_following {
             let response = format!("{mention} さよなら、になっちゃうのかな……");
-            sango.client.notes_create(note.reply(&response)).await?;
+            sango.client.request(note.reply(&response)).await?;
             tokio::time::sleep(Duration::from_secs(10)).await;
             sango
                 .client
-                .following_delete(DeleteFollowing::new(&note.user_id))
+                .request(DeleteFollowing::new(&note.user_id))
                 .await?;
         } else {
             let response = format!("{mention} もともとフォローしてないよー");
-            sango.client.notes_create(note.reply(&response)).await?;
+            sango.client.request(note.reply(&response)).await?;
         }
         Ok(())
     }
@@ -120,12 +120,12 @@ impl Handler for HandleAiScream2 {
         tokio::time::sleep(Duration::from_secs(1)).await;
         sango
             .client
-            .notes_create(note.reply("チョココーヒー よりもあ・な・た♪"))
+            .request(note.reply("チョココーヒー よりもあ・な・た♪"))
             .await?;
         tokio::time::sleep(Duration::from_secs(10)).await;
         sango
             .client
-            .notes_create(CreateNote::new("さっきのなに……？"))
+            .request(CreateNote::new("さっきのなに……？"))
             .await?;
         Ok(())
     }
@@ -141,7 +141,7 @@ impl Handler for HandleSpeedtest {
 
         sango
             .client
-            .notes_create(note.reply("了解。じゃあ計測してくるね"))
+            .request(note.reply("了解。じゃあ計測してくるね"))
             .await?;
 
         log::info!("Starting speedtest...");

@@ -75,7 +75,7 @@ async fn main_loop(sango: Arc<Sango>, conf: &Config) -> anyhow::Result<()> {
 
     sango
         .client
-        .notes_create(CreateNote::new("うーん、うとうとしちゃってたみたい……？"))
+        .request(CreateNote::new("うーん、うとうとしちゃってたみたい……？"))
         .await?;
 
     loop {

@@ -4,7 +4,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::misskey::users::User;
+use crate::misskey::{ApiRequest, users::User};
 
 #[derive(Clone, Copy, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -93,6 +93,11 @@ impl CreateNote {
             ..Default::default()
         }
     }
+}
+
+impl ApiRequest for CreateNote {
+    const ENDPOINT: &str = "/api/notes/create";
+    type Return = ();
 }
 
 #[derive(Deserialize)]

@@ -4,6 +4,8 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::misskey::ApiRequest;
+
 #[derive(Default, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ShowUser {
@@ -34,6 +36,11 @@ impl ShowUser {
         }
     }
     */
+}
+
+impl ApiRequest for ShowUser {
+    const ENDPOINT: &str = "/api/users/show";
+    type Return = UserDetailed;
 }
 
 // Unused

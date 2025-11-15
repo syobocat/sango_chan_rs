@@ -4,11 +4,17 @@
 
 use anyhow::Context;
 use reqwest::Client;
+use serde::{Serialize, de::DeserializeOwned};
 use serde_json::json;
 
 pub mod following;
 pub mod notes;
 pub mod users;
+
+pub trait ApiRequest {
+    const ENDPOINT: &str;
+    type Return;
+}
 
 pub struct MisskeyClient {
     client: Client,
@@ -42,59 +48,22 @@ impl MisskeyClient {
         Ok(i.id)
     }
 
-    pub async fn notes_create(&self, params: notes::CreateNote) -> anyhow::Result<()> {
+    pub async fn request<Req>(&self, params: Req) -> anyhow::Result<Req::Return>
+    where
+        Req: Serialize + ApiRequest,
+        Req::Return: DeserializeOwned,
+    {
         let host = &self.host;
         let resp = self
             .client
-            .post(format!("https://{host}/api/notes/create"))
+            .post(format!("https://{host}{}", Req::ENDPOINT))
             .bearer_auth(&self.token)
             .json(&params)
             .send()
             .await
-            .context("Failed to create a note")?;
-        resp.error_for_status()?;
-        Ok(())
-    }
-
-    pub async fn users_show(&self, params: users::ShowUser) -> anyhow::Result<users::UserDetailed> {
-        let host = &self.host;
-        let resp = self
-            .client
-            .post(format!("https://{host}/api/users/show"))
-            .bearer_auth(&self.token)
-            .json(&params)
-            .send()
-            .await
-            .context("Failed to get a user")?;
-        let user = resp.json().await.context("Failed to parse the response")?;
-        Ok(user)
-    }
-
-    pub async fn following_create(&self, params: following::CreateFollowing) -> anyhow::Result<()> {
-        let host = &self.host;
-        let resp = self
-            .client
-            .post(format!("https://{host}/api/following/create"))
-            .bearer_auth(&self.token)
-            .json(&params)
-            .send()
-            .await
-            .context("Failed to create a following")?;
-        resp.error_for_status()?;
-        Ok(())
-    }
-
-    pub async fn following_delete(&self, params: following::DeleteFollowing) -> anyhow::Result<()> {
-        let host = &self.host;
-        let resp = self
-            .client
-            .post(format!("https://{host}/api/following/delete"))
-            .bearer_auth(&self.token)
-            .json(&params)
-            .send()
-            .await
-            .context("Failed to delete a following")?;
-        resp.error_for_status()?;
-        Ok(())
+            .context("Failed to send request")?;
+        let resp = resp.error_for_status()?;
+        let ret = resp.json().await.context("Failed to parse the response")?;
+        Ok(ret)
     }
 }

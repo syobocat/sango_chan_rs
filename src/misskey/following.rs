@@ -4,6 +4,8 @@
 
 use serde::Serialize;
 
+use crate::misskey::ApiRequest;
+
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CreateFollowing {
@@ -18,4 +20,26 @@ impl CreateFollowing {
     }
 }
 
-pub type DeleteFollowing = CreateFollowing;
+impl ApiRequest for CreateFollowing {
+    const ENDPOINT: &str = "/api/following/create";
+    type Return = ();
+}
+
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DeleteFollowing {
+    user_id: String,
+}
+
+impl DeleteFollowing {
+    pub fn new(user_id: &str) -> Self {
+        Self {
+            user_id: user_id.to_owned(),
+        }
+    }
+}
+
+impl ApiRequest for DeleteFollowing {
+    const ENDPOINT: &str = "/api/following/delete";
+    type Return = ();
+}
