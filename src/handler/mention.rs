@@ -10,6 +10,7 @@ use regex::Regex;
 
 use crate::{
     Sango,
+    handler::Handler,
     misskey::{
         following::{CreateFollowing, DeleteFollowing},
         notes::{CreateNote, Note},
@@ -19,10 +20,68 @@ use crate::{
 
 const MAX_NICKNAME_LENGTH: usize = 15;
 
-pub async fn on_mention(note: Note, sango: &Sango) -> anyhow::Result<()> {
-    let text = &note.text;
+pub struct HandleMention;
+impl Handler for HandleMention {
+    fn gate(&self, note: &Note, sango: &Sango) -> bool {
+        !note.user.is_bot// BOTを無視
+        && note.user.id != sango.self_id // 自身を無視
+    }
 
-    if text.contains("フォロー解除して") {
+    async fn action(&self, note: &Note, sango: &Sango) -> anyhow::Result<()> {
+        let _ = HandleFollow.handle(note, sango).await
+            || HandleUnFollow.handle(note, sango).await
+            || HandleAiScream1.handle(note, sango).await
+            || HandleAiScream2.handle(note, sango).await
+            || HandleSpeedtest.handle(note, sango).await
+            || HandleTodo.handle(note, sango).await
+            || HandleMeet.handle(note, sango).await
+            || HandleHello.handle(note, sango).await
+            || HandleIntro.handle(note, sango).await
+            || HandlePat.handle(note, sango).await
+            || HandleMeow.handle(note, sango).await
+            || HandleTime.handle(note, sango).await
+            || HandleInsult.handle(note, sango).await
+            || HandleChikuwa.handle(note, sango).await
+            || HandlePing.handle(note, sango).await
+            || HandleSetNickname.handle(note, sango).await
+            || HandleForgetNickname.handle(note, sango).await;
+        Ok(())
+    }
+}
+
+struct HandleFollow;
+impl Handler for HandleFollow {
+    const KEYWORDS: &[&str] = &["フォローして"];
+    async fn respond(&self, note: &Note, sango: &Sango) -> anyhow::Result<String> {
+        let user = sango
+            .client
+            .users_show(ShowUser::by_user_id(&note.user_id))
+            .await?;
+        let mention = note.user.mention();
+
+        if user.is_following {
+            let name = sango.savedata.read().await.get_displayname(&note.user);
+            Ok(format!("{mention} {name}さん、もうフォローしてるよー"))
+        } else if user.is_followed {
+            let name = note.user.name.as_ref().unwrap_or(&note.user.username);
+            sango
+                .client
+                .following_create(CreateFollowing::new(&note.user_id))
+                .await?;
+            log::info!("Followed {}.", note.user_id);
+            Ok(format!(
+                "{mention} フォローバックしたよ、{name}さん。これからよろしくね",
+            ))
+        } else {
+            Ok("……だれ？".to_owned())
+        }
+    }
+}
+
+struct HandleUnFollow;
+impl Handler for HandleUnFollow {
+    const KEYWORDS: &[&str] = &["フォロー解除して"];
+    async fn action(&self, note: &Note, sango: &Sango) -> anyhow::Result<()> {
         let user = sango
             .client
             .users_show(ShowUser::by_user_id(&note.user_id))
@@ -33,169 +92,65 @@ pub async fn on_mention(note: Note, sango: &Sango) -> anyhow::Result<()> {
             let response = format!("{mention} さよなら、になっちゃうのかな……");
             sango.client.notes_create(note.reply(&response)).await?;
             tokio::time::sleep(Duration::from_secs(10)).await;
-            if let Err(e) = sango
+            sango
                 .client
                 .following_delete(DeleteFollowing::new(&note.user_id))
-                .await
-            {
-                log::error!("{e}");
-            }
+                .await?;
         } else {
             let response = format!("{mention} もともとフォローしてないよー");
             sango.client.notes_create(note.reply(&response)).await?;
         }
-        return Ok(());
-    } else if text.contains("さんごちゃーん") || text.contains("さんごちゃ〜ん") {
+        Ok(())
+    }
+}
+
+struct HandleAiScream1;
+impl Handler for HandleAiScream1 {
+    const KEYWORDS: &[&str] = &["さんごちゃーん", "さんごちゃ〜ん"];
+    async fn respond(&self, _note: &Note, _sango: &Sango) -> anyhow::Result<String> {
         tokio::time::sleep(Duration::from_secs(1)).await;
-        if let Err(e) = sango.client.notes_create(note.reply("は〜い")).await {
-            log::error!("{e}");
-        }
-        return Ok(());
-    } else if text.contains("何が好き？") {
+        Ok("は〜い".to_owned())
+    }
+}
+
+struct HandleAiScream2;
+impl Handler for HandleAiScream2 {
+    const KEYWORDS: &[&str] = &["何が好き？"];
+    async fn action(&self, note: &Note, sango: &Sango) -> anyhow::Result<()> {
         tokio::time::sleep(Duration::from_secs(1)).await;
-        if let Err(e) = sango
+        sango
             .client
             .notes_create(note.reply("チョココーヒー よりもあ・な・た♪"))
-            .await
-        {
-            log::error!("{e}");
-        }
+            .await?;
         tokio::time::sleep(Duration::from_secs(10)).await;
-        if let Err(e) = sango
+        sango
             .client
             .notes_create(CreateNote::new("さっきのなに……？"))
-            .await
-        {
-            log::error!("{e}");
-        }
-        return Ok(());
-    } else if text.contains("回線速度計測") {
+            .await?;
+        Ok(())
+    }
+}
+
+struct HandleSpeedtest;
+impl Handler for HandleSpeedtest {
+    const KEYWORDS: &[&str] = &["回線速度計測"];
+    async fn respond(&self, note: &Note, sango: &Sango) -> anyhow::Result<String> {
         if note.user_id != sango.admin_id {
-            sango
-                .client
-                .notes_create(note.reply("この機能は使える人が限られてるんだ。ゴメンね"))
-                .await?;
-            return Ok(());
+            return Ok("この機能は使える人が限られてるんだ。ゴメンね".to_owned());
         }
+
         sango
             .client
             .notes_create(note.reply("了解。じゃあ計測してくるね"))
             .await?;
+
         log::info!("Starting speedtest...");
-        let (ping, down, up) = match tokio::task::spawn_blocking(speedtest).await {
-            Ok(values) => values,
-            Err(e) => {
-                log::error!("{e}");
-                return Ok(());
-            }
-        };
+        let (ping, down, up) = tokio::task::spawn_blocking(speedtest).await?;
 
-        let response = format!(
+        Ok(format!(
             "計測かんりょー。下り{down:.2}Mbps、上り{up:.2}Mbps、ping値{ping:.2}msだったよ。……これは速いって言えるのかな？"
-        );
-        if let Err(e) = sango.client.notes_create(note.reply(&response)).await {
-            log::error!("{e}");
-        }
-        return Ok(());
-    } else if text.contains("todo") {
-        log::info!("Todo created.");
-        tokio::time::sleep(Duration::from_secs(60 * 60 * 3)).await;
-        if let Err(e) = sango.client.notes_create(note.reply("これやった？")).await {
-            log::error!("{e}");
-        }
-        return Ok(());
+        ))
     }
-
-    // 通常パターン
-    let response = if text.contains("フォローして") {
-        let user = sango
-            .client
-            .users_show(ShowUser::by_user_id(&note.user_id))
-            .await?;
-
-        let mention = note.user.mention();
-        if user.is_following {
-            let name = sango.savedata.read().await.get_displayname(&note.user);
-            &format!("{mention} {name}さん、もうフォローしてるよー")
-        } else if user.is_followed {
-            let name = note.user.name.as_ref().unwrap_or(&note.user.username);
-            sango
-                .client
-                .following_create(CreateFollowing::new(&note.user_id))
-                .await?;
-            log::info!("Followed {}.", note.user_id);
-            &format!("{mention} フォローバックしたよ、{name}さん。これからよろしくね",)
-        } else {
-            "……だれ？"
-        }
-    } else if text.contains("はじめまして") {
-        "はじめまして、わたしを見つけてくれてありがとう。これからよろしくね"
-    } else if text.contains("こんにちは") {
-        "こんにちは、どうしたの？"
-    } else if text.contains("自己紹介") || text.contains("あなたは？") {
-        // Modified
-        "わたしは「3.5Mbps.net」の看板娘、さんご……のクローンです。……めんどうだから、わたしのことも「さんご」でいいよ。\nあなたのことも、教えて欲しいな"
-    } else if text.contains("よしよし") || text.contains("なでなで") {
-        "わたしの頭なんか撫でて、楽しい？ えっと、あなたが喜んでくれるなら、いいんだけど……"
-    } else if text.contains("にゃーん") {
-        "にゃ〜ん"
-    } else if text.contains("今何時") || text.contains("いまなんじ") {
-        let now = Local::now();
-        let hour = now.hour();
-        let minute = now.minute();
-        let second = now.second();
-        &format!(
-            "いまは {hour}:{minute}:{second} だよ。どうしたの……？ 時計を見る元気もない感じかな？"
-        )
-    } else if text.contains("罵って") {
-        insult()
-    } else if text.contains("ちくわ大明神") {
-        "…なに？"
-    } else if text.contains("ping") {
-        "pong？"
-    } else if text.contains("って呼んで") || text.contains("と呼んで") {
-        match extract_nickname(text) {
-            NicknameResult::NotFound => {
-                // 正しくなければ無視
-                return Ok(());
-            }
-            NicknameResult::TooLong => &format!(
-                "えぇっと、その名前はちょっと長いかも……\n{MAX_NICKNAME_LENGTH}文字以内にしてほしいな"
-            ),
-            NicknameResult::Invalid => "えぇっと、その名前はちょっと……だめかも……",
-            NicknameResult::Ok(name) => {
-                sango
-                    .savedata
-                    .write()
-                    .await
-                    .store_nickname(&note.user_id, &name)?;
-                &format!(
-                    "わかった。これからは{name}さんって呼ぶね\nこれからもよろしくね、{name}さん"
-                )
-            }
-        }
-    } else if text.contains("呼び名を忘れて") || text.contains("あだ名を消して") {
-        let removed = sango
-            .savedata
-            .write()
-            .await
-            .forget_nickname(&note.user_id)?;
-        if removed {
-            let name = note.user.name.as_ref().unwrap_or(&note.user.username);
-            &format!("わかった。これからは{name}さんって呼ぶね\nこれからもよろしくね、{name}さん")
-        } else {
-            "もともと特別な呼び名は登録されていないみたいだよ"
-        }
-    } else if text.contains("さんごちゃん？") {
-        let name = sango.savedata.read().await.get_displayname(&note.user);
-        &format!("どうしたの？ {name}さん")
-    } else {
-        return Ok(());
-    };
-
-    sango.client.notes_create(note.reply(response)).await?;
-
-    Ok(())
 }
 
 fn speedtest() -> (f64, f64, f64) {
@@ -213,11 +168,112 @@ fn speedtest() -> (f64, f64, f64) {
     (ping, down, up)
 }
 
-enum NicknameResult {
-    NotFound,
-    TooLong,
-    Invalid,
-    Ok(String),
+struct HandleTodo;
+impl Handler for HandleTodo {
+    const KEYWORDS: &[&str] = &["todo"];
+    async fn respond(&self, _note: &Note, _sango: &Sango) -> anyhow::Result<String> {
+        log::info!("Todo created.");
+        tokio::time::sleep(Duration::from_secs(60 * 60 * 3)).await;
+        Ok("これやった？".to_owned())
+    }
+}
+
+struct HandleMeet;
+impl Handler for HandleMeet {
+    const KEYWORDS: &[&str] = &["はじめまして"];
+    const RESPONSE: &str = "はじめまして、わたしを見つけてくれてありがとう。これからよろしくね";
+}
+
+struct HandleHello;
+impl Handler for HandleHello {
+    const KEYWORDS: &[&str] = &["こんにちは"];
+    const RESPONSE: &str = "こんにちは、どうしたの？";
+}
+
+struct HandleIntro;
+impl Handler for HandleIntro {
+    const KEYWORDS: &[&str] = &["自己紹介", "あなたは？"];
+    const RESPONSE: &str = "わたしは「3.5Mbps.net」の看板娘、さんご……のクローンです。……めんどうだから、わたしのことも「さんご」でいいよ。\nあなたのことも、教えて欲しいな";
+}
+
+struct HandlePat;
+impl Handler for HandlePat {
+    const KEYWORDS: &[&str] = &["よしよし", "なでなで"];
+    const RESPONSE: &str =
+        "わたしの頭なんか撫でて、楽しい？ えっと、あなたが喜んでくれるなら、いいんだけど……";
+}
+
+struct HandleMeow;
+impl Handler for HandleMeow {
+    const KEYWORDS: &[&str] = &["にゃーん"];
+    const RESPONSE: &str = "にゃ〜ん";
+}
+
+struct HandleTime;
+impl Handler for HandleTime {
+    const KEYWORDS: &[&str] = &["今何時", "いまなんじ"];
+    async fn respond(&self, _note: &Note, _sango: &Sango) -> anyhow::Result<String> {
+        let now = Local::now();
+        let hour = now.hour();
+        let minute = now.minute();
+        let second = now.second();
+        Ok(format!(
+            "いまは {hour}:{minute}:{second} だよ。どうしたの……？ 時計を見る元気もない感じかな？"
+        ))
+    }
+}
+
+struct HandleInsult;
+impl Handler for HandleInsult {
+    const KEYWORDS: &[&str] = &["罵って"];
+    async fn respond(&self, _note: &Note, _sango: &Sango) -> anyhow::Result<String> {
+        let chosen = [
+            "変なお願いをするもんだね……",
+            "えっと……、ど、どんな風に罵ってほしいとか、ある？",
+        ]
+        .choose(&mut rand::rng())
+        .unwrap();
+        Ok(chosen.to_owned().to_owned())
+    }
+}
+
+struct HandleChikuwa;
+impl Handler for HandleChikuwa {
+    const KEYWORDS: &[&str] = &["ちくわ大明神"];
+    const RESPONSE: &str = "…なに？";
+}
+
+struct HandlePing;
+impl Handler for HandlePing {
+    const KEYWORDS: &[&str] = &["ping"];
+    const RESPONSE: &str = "pong？";
+}
+
+struct HandleSetNickname;
+impl Handler for HandleSetNickname {
+    const KEYWORDS: &[&str] = &["って呼んで", "と呼んで"];
+    async fn respond(&self, note: &Note, sango: &Sango) -> anyhow::Result<String> {
+        match extract_nickname(&note.text) {
+            NicknameResult::NotFound => {
+                // 正しくなければ無視
+                Ok(String::new())
+            }
+            NicknameResult::TooLong => Ok(format!(
+                "えぇっと、その名前はちょっと長いかも……\n{MAX_NICKNAME_LENGTH}文字以内にしてほしいな"
+            )),
+            NicknameResult::Invalid => Ok("えぇっと、その名前はちょっと……だめかも……".to_owned()),
+            NicknameResult::Ok(name) => {
+                sango
+                    .savedata
+                    .write()
+                    .await
+                    .store_nickname(&note.user_id, &name)?;
+                Ok(format!(
+                    "わかった。これからは{name}さんって呼ぶね\nこれからもよろしくね、{name}さん"
+                ))
+            }
+        }
+    }
 }
 
 fn extract_nickname(text: &str) -> NicknameResult {
@@ -236,6 +292,13 @@ fn extract_nickname(text: &str) -> NicknameResult {
         return NicknameResult::Invalid;
     };
     NicknameResult::Ok(name)
+}
+
+enum NicknameResult {
+    NotFound,
+    TooLong,
+    Invalid,
+    Ok(String),
 }
 
 fn sanitize_nickname(name: &str) -> Option<String> {
@@ -266,11 +329,22 @@ fn sanitize_nickname(name: &str) -> Option<String> {
     }
 }
 
-fn insult() -> &'static str {
-    [
-        "変なお願いをするもんだね……",
-        "えっと……、ど、どんな風に罵ってほしいとか、ある？",
-    ]
-    .choose(&mut rand::rng())
-    .unwrap()
+struct HandleForgetNickname;
+impl Handler for HandleForgetNickname {
+    const KEYWORDS: &[&str] = &["呼び名を忘れて", "あだ名を消して"];
+    async fn respond(&self, note: &Note, sango: &Sango) -> anyhow::Result<String> {
+        let removed = sango
+            .savedata
+            .write()
+            .await
+            .forget_nickname(&note.user_id)?;
+        if removed {
+            let name = note.user.name.as_ref().unwrap_or(&note.user.username);
+            Ok(format!(
+                "わかった。これからは{name}さんって呼ぶね\nこれからもよろしくね、{name}さん"
+            ))
+        } else {
+            Ok("もともと特別な呼び名は登録されていないみたいだよ".to_owned())
+        }
+    }
 }

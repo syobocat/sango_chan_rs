@@ -80,7 +80,6 @@ async fn main_loop(sango: Arc<Sango>, conf: &Config) -> anyhow::Result<()> {
 
     loop {
         let next = ws.next().await?; // 接続が切れたらloopを抜ける
-
         // Fire and forget
         tokio::spawn(handler::handle(next, Arc::clone(&sango)));
     }
