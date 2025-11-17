@@ -303,13 +303,6 @@ enum NicknameResult {
 
 fn sanitize_nickname(name: &str) -> Option<String> {
     let sanitized = name
-        .replace('<', "<\u{200b}") // <center>、<plain>など
-        .replace('$', "$\u{200b}") // $[で始まるMFM全般
-        .replace("://", ":\u{200b}//") // リンク
-        .replace("](", "]\u{200b}(") // リンク
-        .replace('#', "#\u{200b}") // ハッシュタグ
-        .replace('@', "@\u{200b}") // メンション
-        .replace('*', "*\u{200b}") // 太字、イタリック
         .replace("\u{061c}", "") // Arabic letter mark
         .replace("\u{200e}", "") // Left-to-right mark
         .replace("\u{200f}", "") // Right-to-left mark
@@ -321,7 +314,14 @@ fn sanitize_nickname(name: &str) -> Option<String> {
         .replace("\u{2066}", "") // Left-to-right isolate
         .replace("\u{2067}", "") // Right-to-left isolate
         .replace("\u{2068}", "") // First strong isolate
-        .replace("\u{2069}", ""); // Pop directional isolate
+        .replace("\u{2069}", "") // Pop directional isolate
+        .replace('<', "<\u{200b}") // <center>、<plain>など
+        .replace('$', "$\u{200b}") // $[で始まるMFM全般
+        .replace("://", ":\u{200b}//") // リンク
+        .replace("](", "]\u{200b}(") // リンク
+        .replace('#', "#\u{200b}") // ハッシュタグ
+        .replace('@', "@\u{200b}") // メンション
+        .replace('*', "*\u{200b}"); // 太字、イタリック
     if sanitized.is_empty() || sanitized.chars().all(char::is_whitespace) {
         None
     } else {
